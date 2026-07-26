@@ -116,26 +116,45 @@ class TelnetShell(Telnet):
         return self.run_command("ps")
 
     def read_file(self, filename: str, as_base64=False, with_newline=True):
-        """ read file content """
+        """Read complete file content from the gateway."""
         # pylint: disable=broad-except
         try:
+            command = "cat {} | base64".format(filename) if as_base64 \
+                else "cat {}".format(filename)
+            raw = self.run_command(command)
+
+            if not raw:
+                raise RuntimeError(
+                    "Gateway returned no data for {}".format(filename)
+                )
+
+            raw = raw.replace("\r\n", "\n").replace("\r", "\n")
+            lines = raw.splitlines()
+            suffix = self._suffix.strip()
+
+            while lines and lines[-1].strip() == suffix:
+                lines.pop()
+
+            if lines and lines[0].strip() == command:
+                lines.pop(0)
+
+            raw = "\n".join(lines).strip()
+
+            if not raw:
+                raise RuntimeError(
+                    "Gateway returned empty file content for {}".format(
+                        filename
+                    )
+                )
+
             if as_base64:
-                command = "cat {} | base64\n".format(filename)
-                self.write(command.encode())
-                raw = self.read_until(self._suffix.encode()).decode()
-                if not with_newline:
-                    raw = self.read_until(self._suffix.encode()).decode()
-                return base64.b64decode(raw)
-            command = "cat {}\n".format(filename)
-            self.write(command.encode())
-            ret = self.read_until(self._suffix.encode()).decode()
-            if not with_newline:
-                ret = self.read_until(self._suffix.encode()).decode()
-            if ret.endswith(self._suffix):
-                ret = "".join(ret.rsplit(self._suffix, 1))
-            return ret.strip("\n")
-        except Exception:
-            return ''
+                return base64.b64decode("".join(raw.splitlines()))
+
+            return raw if with_newline else "".join(raw.splitlines())
+        except Exception as exc:
+            raise RuntimeError(
+                "Failed reading gateway file {}: {}".format(filename, exc)
+            ) from exc
 
     def get_prop(self, property_value: str):
         """ get property """
@@ -177,7 +196,6 @@ class TelnetShell(Telnet):
         return raw[raw.find(">>>") + 4:]
 
     def get_token(self):
-        """ get gateway token """
         filename = "/data/miio/device.token"
         if self.file_exist(filename):
             return self.read_file(filename).rstrip().encode().hex()
@@ -197,7 +215,7 @@ class TelnetShell(Telnet):
             "G2H": "g2h",
             "M2": "m2 2022",
             "M3": "m3",
-            "M1S": "m1s gen2",
+            "M1S": "m1s",
             "V1": "v1",
             "M200": "m200",
             "M100": "m100"
@@ -294,4 +312,3 @@ class TelnetShellM2POE(TelnetShell):
         self.read_until(b"/ # ", timeout=10)
         self.run_command("stty -echo")
         self.read_until(self._suffix.encode(), timeout=10)
-
