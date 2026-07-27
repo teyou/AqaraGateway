@@ -129,38 +129,26 @@ class TelnetShell(Telnet):
             return self.run_command(f"ps | grep {ps}")
         return self.run_command("ps")
 
-    def read_file(
-        self,
-        filename: str,
-        as_base64: bool = False,
-        with_newline: bool = True,
-    ):
+    def read_file(self, filename: str, as_base64: bool = False, with_newline: bool = True):
         """Read complete file content from the gateway."""
 
         try:
-            if as_base64:
-                command = f"cat {filename} | base64"
-            else:
-                command = f"cat {filename}"
-
-            # run_command already performs exactly one read until the shell prompt.
-            raw = self.run_command(command, as_bytes=False)
+            command = "cat {} | base64".format(filename) if as_base64 \
+                else "cat {}".format(filename)
+            raw = self.run_command(command)
 
             if not raw:
-                raise RuntimeError(f"Gateway returned no data for {filename}")
+                raise RuntimeError(
+                    "Gateway returned no data for {}".format(filename)
+                )
 
-            # Normalize Telnet line endings.
             raw = raw.replace("\r\n", "\n").replace("\r", "\n")
-
-            # Remove the trailing shell prompt.
-            suffix = self._suffix.strip()
-
             lines = raw.splitlines()
+            suffix = self._suffix.strip()
 
             while lines and lines[-1].strip() == suffix:
                 lines.pop()
 
-            # Remove a possible echoed command.
             if lines and lines[0].strip() == command:
                 lines.pop(0)
 
@@ -168,29 +156,19 @@ class TelnetShell(Telnet):
 
             if not raw:
                 raise RuntimeError(
-                    f"Gateway returned empty file content for {filename}"
+                    "Gateway returned empty file content for {}".format(
+                        filename
+                    )
                 )
 
             if as_base64:
-                encoded = "".join(raw.splitlines())
+                return base64.b64decode("".join(raw.splitlines()))
 
-                try:
-                    return base64.b64decode(encoded)
-                except Exception as exc:
-                    raise RuntimeError(
-                        f"Invalid base64 content from {filename}: {exc}"
-                    ) from exc
-
-            if with_newline:
-                return raw
-
-            # JSON supports whitespace, but the existing caller requests a
-            # single-line value. Join lines rather than reading Telnet twice.
-            return "".join(raw.splitlines())
+            return raw if with_newline else "".join(raw.splitlines())
 
         except Exception as exc:
             raise RuntimeError(
-                f"Failed reading gateway file {filename}: {exc}"
+                "Failed reading gateway file {}: {}".format(filename, exc)
             ) from exc
 
     def read_file_backup(self, filename: str, as_base64=False, with_newline=True):
