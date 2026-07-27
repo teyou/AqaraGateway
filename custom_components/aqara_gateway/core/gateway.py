@@ -373,9 +373,9 @@ class Gateway:
                     version_g2h = data.group(1) if data else ''
                     data = re.search(r"ro.sys.build_num=([0-9]+).+", raw)
                     build_num_g2h = data.group(1) if data else ''
-                    coordinator_path = '/mnt/config/zigbee/coordinator.info'
-                    raw = shell.read_file(
-                        coordinator_path, with_newline=False)
+                coordinator_path = '/mnt/config/zigbee/coordinator.info'
+                raw = shell.read_file(
+                    coordinator_path, with_newline=False)
             else:
                 raw = shell.read_file(
                     '/data/zigbee/coordinator.info', with_newline=False)
